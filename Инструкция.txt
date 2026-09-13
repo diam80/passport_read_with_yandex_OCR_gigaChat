@@ -1,0 +1,37 @@
+
+В папке выше создайте файл ".env" и заполните
+Client ID:
+ваш_client_id
+
+Client Secret:
+ваш_client_secret
+
+Scope:
+GIGACHAT_API_PERS
+
+Authorization Key:
+ваш_auth_key
+
+YANDEX_FOLDER_ID:
+ваш_folder_id
+
+YANDEX_API_KEY:
+ваш_api_key
+
+
+Как использовать: получите на console.cloud.yandex.ru API-ключ (роль ai.vision.user) и ID каталога, впишите в файл .env (он лежит папкой выше проекта).
+
+
+
+Запуск в браузере:
+Запустите bat-файл start-passport.bat
+В браузере откройте страницу http://localhost:3000/
+
+
+Запуск в консоли:
+Положите фото паспорта в папку проекта и выполните в cmd команду:
+node passport-read.js
+или
+node passport-read.js путь\к\фото.jpg
+
+GigaChat-2-Pro выбран как model; при необходимости задайте переменную GIGACHAT_MODEL=GigaChat-2-Max (или другую модель).

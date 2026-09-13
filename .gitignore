@@ -1,0 +1,14 @@
+node_modules/
+.env
+*.env
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tif
+*.tiff
+*.heic
+*.webp
+
+# локальные заметки с фрагментами ключей, если появятся
+*_secrets.txt

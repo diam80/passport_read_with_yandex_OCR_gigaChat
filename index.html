@@ -1,0 +1,1169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PassportRead — распознавание паспорта</title>
+  <style>
+    :root {
+      --bg: #f4f6fa;
+      --card: #ffffff;
+      --border: #d9dfe8;
+      --accent: #1f6feb;
+      --accent-dark: #1858b8;
+      --text: #1a2233;
+      --muted: #6b7687;
+      --ok: #2e9e5b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 18px 28px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    header h1 { font-size: 18px; margin: 0; }
+    header .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+    main { max-width: 1100px; margin: 24px auto; padding: 0 28px; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    .left { min-width: 0; }
+    .right { min-width: 0; }
+
+    .dropzone {
+      background: var(--card);
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      min-height: 230px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .12s, background .12s;
+    }
+    .dropzone:hover, .dropzone.over { border-color: var(--accent); background: #f7faff; }
+    .dz-placeholder { color: var(--muted); font-size: 14px; font-weight: 600; }
+    .dz-sub { font-size: 12px; font-weight: 400; margin-top: 4px; }
+    #preview {
+      max-width: 100%;
+      max-height: 320px;
+      border-radius: 10px;
+      display: none;
+      object-fit: contain;
+    }
+    .controls {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      width: 100%;
+      min-width: 0;
+    }
+    .controls > .btn,
+    .controls > label.btn {
+      flex: 1 1 0;
+      text-align: center;
+    }
+    .recognize-wide { width: 100%; margin-top: 14px; }
+    .status { margin-top: 12px; min-height: 20px; font-size: 14px; }
+    .status.error { color: #c0392b; }
+    .status-line { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+    .status-line .status { margin-top: 0; }
+
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+      visibility: hidden;
+      max-height: 0;
+      overflow: hidden;
+    }
+    .fields.show { visibility: visible; max-height: none; }
+
+    .field-heading { display: none; }
+    .field {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      transition: border-color .12s, box-shadow .12s;
+    }
+    .field.dragging { opacity: .5; }
+    .field.over { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(31,111,235,.18); }
+    .field-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .grip {
+      cursor: grab;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1;
+      padding: 0 4px;
+      user-select: none;
+    }
+    .grip:active { cursor: grabbing; }
+    .field label {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .3px;
+      color: var(--text);
+      white-space: pre-line;
+    }
+    .copy-val {
+      border: 1px solid var(--border);
+      background: #eef1f6;
+      color: var(--text);
+      border-radius: 6px;
+      padding: 3px 9px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .copy-val:hover { background: #e2e7ef; }
+    .copy-val.done { border-color: var(--ok); color: var(--ok); }
+    .field .en { color: var(--muted); font-weight: 500; }
+    .field-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .field input {
+      flex: 1;
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 10px;
+      font-size: 14px;
+      background: #fbfcfe;
+    }
+    .field input:focus { outline: none; border-color: var(--accent); }
+    .drag-note {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .view-toggle {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .view-toggle button {
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .view-toggle button.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .fields.table {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0;
+    }
+    .fields.table .field,
+    .fields.table .field-heading {
+      display: grid;
+      grid-template-columns: 1fr 2fr 90px;
+      gap: 16px;
+      align-items: center;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      border-radius: 0;
+      padding: 8px 4px;
+    }
+    .fields.table .field-heading {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      letter-spacing: .3px;
+    }
+    .fields.table .field-heading span:last-child { text-align: right; }
+    .fields.table .field:last-child { border-bottom: none; }
+    .fields.table .field.over { box-shadow: inset 0 0 0 3px rgba(31,111,235,.18); }
+    .fields.table .field-head {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+      margin-bottom: 0;
+    }
+    .fields.table .field label {
+      flex-direction: column;
+      align-items: flex-end;
+      text-align: right;
+      display: flex;
+    }
+    .fields.table .field-controls {
+      justify-content: flex-start;
+      padding-left: 2px;
+    }
+    .fields.table .conf-wrap { margin-top: 0; }
+    .fields.table .conf-label { display: none; }
+    .fields.table .conf-val { width: 100%; text-align: right; }
+    .fields.table .drag-note { display: none; }
+
+    .conf-wrap {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .conf-label {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      font-weight: 600;
+    }
+    .conf-val {
+      width: 90px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 14px;
+      background: #fbfcfe;
+    }
+    .conf-val:focus { outline: none; }
+
+    .file-note {
+      background: #fff4e5;
+      border: 1px solid #e6c789;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .file-note code { background: #f2ede1; padding: 2px 6px; border-radius: 5px; }
+
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 11px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--accent-dark); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn.secondary { background: #eef1f6; color: var(--text); font-weight: 500; }
+    .btn.secondary:hover { background: #e2e7ef; }
+
+    .actions { margin-top: 20px; display: none; gap: 10px; flex-wrap: wrap; }
+    .actions.show { display: flex; }
+
+    .prompt-section {
+      margin-top: 24px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .prompt-section h2 {
+      font-size: 15px;
+      margin: 0 0 4px;
+    }
+    .prompt-section .sub {
+      color: var(--muted);
+      font-size: 13px;
+      margin: 0 0 12px;
+    }
+    #promptText {
+      width: 100%;
+      min-height: 220px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      resize: vertical;
+      background: #fbfcfe;
+    }
+    #promptText:focus { outline: none; border-color: var(--accent); }
+    .prompt-footer {
+      margin-top: 12px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .prompt-pick {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .prompt-pick select {
+      flex: 1;
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 10px;
+      font-size: 14px;
+      background: var(--card);
+    }
+    .prompt-pick select:focus { outline: none; border-color: var(--accent); }
+    .prompt-status { font-size: 13px; color: var(--muted); }
+    .prompt-status.ok { color: var(--ok); }
+    .prompt-status.err { color: #c0392b; }
+
+    .model-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      align-items: center;
+    }
+    .model-row input,
+    .model-row select {
+      flex: 1;
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 10px;
+      font-size: 14px;
+      background: var(--card);
+    }
+    .model-row input:focus,
+    .model-row select:focus { outline: none; border-color: var(--accent); }
+    .model-row .btn { flex: 0 0 auto; }
+
+    .auth-note {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      background: #eef6ff;
+      border: 1px solid #bcd8f5;
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .auth-note .auth-text a { color: var(--accent); }
+    .auth-note.auth-missing {
+      background: #fdecea;
+      border-color: #f0b4ad;
+    }
+    .auth-note.auth-missing .auth-text,
+    .auth-note.auth-missing .auth-text a { color: #c0392b; }
+
+    .yandex-model-row { margin-top: 12px; }
+    .yandex-model-row .yandex-model-label {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .yandex-model-row select {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 10px;
+      font-size: 14px;
+      background: var(--card);
+    }
+    .yandex-model-row select:focus { outline: none; border-color: var(--accent); }
+
+    .raw-result {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+    }
+    .raw-result .raw-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .raw-result .raw-head b { font-size: 14px; }
+    .raw-result pre {
+      background: #f7f8fb;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 13px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+      max-height: 420px;
+      overflow: auto;
+    }
+    .raw-result details { margin-top: 12px; }
+    .raw-result details summary {
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--muted);
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>PassportRead</h1>
+      <div class="sub">GigaChat Vision · Yandex OCR · распознавание паспорта РФ</div>
+    </div>
+    <button class="btn secondary" id="reset" style="display:none">Новое фото</button>
+  </header>
+
+  <main>
+    <section class="auth-note" id="authNote">
+      <span class="auth-text" id="authText">
+        Для использования нужны данные доступа: для GigaChat —
+        <a href="https://developers.sber.ru/docs/ru/gigachat/quickstart/ind-create-project" target="_blank" rel="noopener">регистрация на developers.sber.ru</a>,
+        для Yandex OCR — API-ключ и ID каталога из console.cloud.yandex.ru
+        (поля <code>YANDEX_API_KEY</code> и <code>YANDEX_FOLDER_ID</code> в .env).
+      </span>
+      <button class="btn secondary" id="openEnv" type="button">Открыть .env</button>
+    </section>
+
+    <section id="fileNote" class="file-note" style="display:none">
+      Страница открыта как файл. Запустите сервер командой <code>node server.js</code> в папке проекта
+      и откройте <b>http://localhost:3000</b>.
+    </section>
+
+    <section class="layout">
+      <section class="left">
+        <div class="dropzone" id="dropzone">
+          <div class="dz-placeholder" id="dzPlaceholder">
+            Перетащите фото паспорта сюда
+            <div class="dz-sub">или выберите кнопкой ниже</div>
+          </div>
+          <img id="preview" alt="">
+        </div>
+        <div class="controls">
+          <label class="btn secondary" for="file" style="display:inline-block">
+            Выбрать фото
+          </label>
+          <input type="file" id="file" accept="image/*" style="display:none">
+          <button class="btn secondary" id="openFile" type="button" style="display:none">Открыть файл</button>
+        </div>
+        <button class="btn recognize-wide" id="recognize">Распознать (GigaChat)</button>
+        <div class="model-row">
+          <select id="modelSelect" title="Выберите модель из списка"></select>
+          <input id="modelInput" placeholder="Своя модель…" style="display:none"
+                 title="Произвольное имя модели">
+          <button class="btn secondary" id="addModel" type="button" title="Добавить текущее значение в список моделей">＋</button>
+        </div>
+        <button class="btn secondary recognize-wide" id="recognizeYandex" type="button">Распознать (Yandex OCR)</button>
+        <div class="yandex-model-row">
+          <div class="yandex-model-label">Yandex OCR модель</div>
+          <select id="yandexModelSelect" title="Модель для распознавания через Yandex OCR"></select>
+        </div>
+        <div class="status-line">
+          <div class="status" id="status"></div>
+        </div>
+      </section>
+
+      <section class="right">
+        <div class="view-toggle" id="viewToggle">
+          <button type="button" data-view="cards" class="active">Карточки</button>
+          <button type="button" data-view="table">Таблица</button>
+        </div>
+        <section class="fields" id="fields"></section>
+        <section class="raw-result" id="rawResult" style="display:none">
+          <div class="raw-head">
+            <b id="rawTitle">Yandex OCR</b>
+            <button class="btn secondary" id="copyRaw" type="button">Скопировать текст</button>
+          </div>
+          <pre id="rawText" spellcheck="false"></pre>
+          <details id="rawDetails">
+            <summary>Сырой JSON ответа Yandex</summary>
+            <pre id="rawJson" spellcheck="false"></pre>
+          </details>
+        </section>
+        <div class="actions" id="actions">
+          <button class="btn secondary" id="copyJson">Скопировать JSON (с учётом правок)</button>
+          <button class="btn" id="reRecognize">Распознать заново</button>
+        </div>
+      </section>
+    </section>
+
+    <section class="prompt-section">
+      <h2>Промпт для распознавания</h2>
+      <p class="sub">Каждый промпт хранится в файле <code>prompt_&lt;название&gt;.txt</code> рядом с сервером. Изменения применяются при следующем распознавании.</p>
+      <div class="prompt-pick">
+        <select id="promptSelect"></select>
+        <button class="btn secondary" id="addPrompt" type="button">＋ Добавить</button>
+      </div>
+      <textarea id="promptText" spellcheck="false"></textarea>
+      <div class="prompt-footer">
+        <button class="btn" id="savePrompt">Сохранить промпт</button>
+        <span class="prompt-status" id="promptStatus"></span>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const $ = (sel) => document.querySelector(sel);
+
+    if (location.protocol === 'file:') {
+      document.getElementById('fileNote').style.display = 'block';
+    }
+
+    const fileInput = $('#file');
+    const preview = $('#preview');
+    const recognizeBtn = $('#recognize');
+    const recognizeYandexBtn = $('#recognizeYandex');
+    const status = $('#status');
+    const fieldsEl = $('#fields');
+    const actions = $('#actions');
+    const resetBtn = $('#reset');
+    const openFileBtn = $('#openFile');
+    const promptSelect = $('#promptSelect');
+    const promptText = $('#promptText');
+    const promptStatus = $('#promptStatus');
+    const modelSelect = $('#modelSelect');
+    const modelInput = $('#modelInput');
+    const yandexModelSelect = $('#yandexModelSelect');
+    const rawResult = $('#rawResult');
+    const rawTextEl = $('#rawText');
+    const rawJsonEl = $('#rawJson');
+    const rawTitleEl = $('#rawTitle');
+
+    const YANDEX_MODELS = [
+      ['passport', 'Паспорт РФ (поля документа)'],
+      ['driver-license-front', 'Водительское удостоверение — лицевая сторона'],
+      ['driver-license-back', 'Водительское удостоверение — оборотная сторона'],
+      ['vehicle-registration-front', 'СТС — лицевая сторона'],
+      ['vehicle-registration-back', 'СТС — оборотная сторона'],
+      ['license-plates', 'Регистрационные номера авто'],
+      ['page', 'Печатный текст (одна колонка)'],
+      ['page-column-sort', 'Многоколоночный текст'],
+      ['handwritten', 'Рукописный текст'],
+      ['table', 'Таблицы'],
+      ['markdown', 'Текст в формате Markdown'],
+      ['math-markdown', 'Математические формулы (Markdown/LaTeX)'],
+    ];
+
+    function fillYandexModels() {
+      yandexModelSelect.innerHTML = '';
+      YANDEX_MODELS.forEach(([value, label]) => {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = label;
+        yandexModelSelect.appendChild(opt);
+      });
+      const saved = localStorage.getItem('passportread.yandexmodel');
+      if (saved && YANDEX_MODELS.some(([v]) => v === saved)) yandexModelSelect.value = saved;
+      yandexModelSelect.addEventListener('change', () => {
+        localStorage.setItem('passportread.yandexmodel', yandexModelSelect.value);
+      });
+    }
+
+    function renderYandex(data) {
+      fieldsEl.classList.remove('show');
+      actions.classList.remove('show');
+      rawResult.style.display = '';
+      rawTitleEl.textContent = 'Yandex OCR · ' + (data.model || 'passport');
+      rawTextEl.textContent = data.text || '(пусто)';
+      rawJsonEl.textContent = data.raw || '';
+    }
+
+    function state(statusText, isError = false) {
+      status.textContent = statusText;
+      status.className = 'status' + (isError ? ' error' : '');
+    }
+
+    function parsePromptLabels() {
+      const labels = {};
+      const t = promptText ? promptText.value : '';
+      const s = t.indexOf('{');
+      const e = t.lastIndexOf('}');
+      if (s === -1 || e <= s) return labels;
+      const block = t.slice(s, e + 1);
+      try {
+        Object.entries(JSON.parse(block)).forEach(([k, v]) => {
+          if (typeof v === 'string') labels[k] = v;
+        });
+        return labels;
+      } catch { }
+      let m;
+      const re = /"([A-Za-z_][A-Za-z0-9_]*)":\s*"((?:[^"\\]|\\.)*)"/g;
+      while ((m = re.exec(block))) labels[m[1]] = m[2];
+      return labels;
+    }
+
+    function formatConfidence(raw) {
+      const n = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(',', '.'));
+      if (!isFinite(n)) return '';
+      let v = n;
+      if (v >= 0 && v <= 1) v *= 100;
+      return v.toFixed(1);
+    }
+
+    function renderFields(data) {
+      const labels = parsePromptLabels();
+      const EXTRA_LABELS = { rawText: 'Полный текст (как распознано)' };
+      fieldsEl.innerHTML = '';
+      rawResult.style.display = 'none';
+
+      const confidences = {};
+      const CONF_SUFFIX = '_confidence';
+      Object.keys(data).forEach((key) => {
+        if (key.endsWith(CONF_SUFFIX)) {
+          confidences[key.slice(0, -CONF_SUFFIX.length)] = data[key];
+        }
+      });
+
+      const heading = document.createElement('div');
+      heading.className = 'field-heading';
+      ['Поле', 'Значение', 'Уверенность'].forEach((t) => {
+        const s = document.createElement('span');
+        s.textContent = t;
+        heading.appendChild(s);
+      });
+      fieldsEl.appendChild(heading);
+
+      Object.entries(data).forEach(([key, value]) => {
+        if (key.endsWith(CONF_SUFFIX)) return;
+        const card = document.createElement('div');
+        card.className = 'field';
+        card.id = 'f-' + key;
+        card.dataset.key = key;
+
+        const head = document.createElement('div');
+        head.className = 'field-head';
+
+        const grip = document.createElement('span');
+        grip.className = 'grip';
+        grip.draggable = true;
+        grip.title = 'Перетащить значение в другое поле';
+        grip.textContent = '⠿';
+
+        const label = document.createElement('label');
+        const b = document.createElement('b');
+        b.textContent = EXTRA_LABELS[key] ?? labels[key] ?? key;
+        const en = document.createElement('span');
+        en.className = 'en';
+        en.textContent = key;
+        label.appendChild(b);
+        label.appendChild(document.createElement('br'));
+        label.appendChild(en);
+
+        head.appendChild(grip);
+        head.appendChild(label);
+        card.appendChild(head);
+
+        const controls = document.createElement('div');
+        controls.className = 'field-controls';
+
+        const input = document.createElement('input');
+        input.value = value ?? '';
+        input.addEventListener('keydown', (e) => e.stopPropagation());
+        controls.appendChild(input);
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'copy-val';
+        copyBtn.title = 'Скопировать значение';
+        copyBtn.textContent = 'Копировать';
+        controls.appendChild(copyBtn);
+
+        card.appendChild(controls);
+
+        if (confidences[key] !== undefined && confidences[key] !== null && confidences[key] !== '') {
+          const conf = formatConfidence(confidences[key]);
+          if (conf !== '') {
+            const confWrap = document.createElement('div');
+            confWrap.className = 'conf-wrap';
+            const conLabel = document.createElement('span');
+            conLabel.className = 'conf-label';
+            conLabel.textContent = 'Уверенность:';
+            const confInput = document.createElement('input');
+            confInput.className = 'conf-val';
+            confInput.readOnly = true;
+            confInput.tabIndex = -1;
+            confInput.value = conf;
+            confInput.title = 'Уверенность по версии модели';
+            confWrap.appendChild(conLabel);
+            confWrap.appendChild(confInput);
+            card.appendChild(confWrap);
+          }
+        }
+
+        const note = document.createElement('div');
+        note.className = 'drag-note';
+        note.textContent = ':: перетащите значение сюда';
+        card.appendChild(note);
+
+        grip.addEventListener('dragstart', (e) => {
+          e.dataTransfer.setData('text/plain', input.value);
+          e.dataTransfer.setData('srcId', card.id);
+          card.classList.add('dragging');
+        });
+        grip.addEventListener('dragend', () => card.classList.remove('dragging'));
+
+        copyBtn.addEventListener('click', async () => {
+          const ok = await copyTextToClipboard(input.value);
+          if (ok) {
+            copyBtn.classList.add('done');
+            copyBtn.textContent = 'Скопировано';
+            setTimeout(() => { copyBtn.classList.remove('done'); copyBtn.textContent = 'Копировать'; }, 1200);
+          }
+        });
+
+        card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('over'); });
+        card.addEventListener('dragleave', () => card.classList.remove('over'));
+        card.addEventListener('drop', (e) => {
+          e.preventDefault();
+          card.classList.remove('over');
+          const val = e.dataTransfer.getData('text/plain');
+          const srcId = e.dataTransfer.getData('srcId');
+          if (!val) return;
+          const srcInput = srcId ? document.querySelector('#' + srcId + ' .field-controls input') : null;
+          if (srcInput && srcInput !== input) {
+            const targetOld = input.value;
+            input.value = val;
+            srcInput.value = targetOld;
+          } else {
+            input.value = val;
+          }
+        });
+
+        fieldsEl.appendChild(card);
+      });
+      fieldsEl.classList.add('show');
+      actions.classList.add('show');
+      resetBtn.style.display = '';
+    }
+
+    function collectFields() {
+      const data = {};
+      fieldsEl.querySelectorAll('.field').forEach((card) => {
+        const key = card.dataset.key;
+        const valInput = card.querySelector('.field-controls input');
+        const confInput = card.querySelector('.conf-val');
+        if (valInput) data[key] = valInput.value;
+        if (confInput && confInput.value !== '') data[key + '_confidence'] = confInput.value;
+      });
+      return data;
+    }
+
+    let currentFile = null;
+
+    function setFile(f) {
+      currentFile = f;
+      preview.src = URL.createObjectURL(f);
+      preview.style.display = 'block';
+      document.getElementById('dzPlaceholder').style.display = 'none';
+      openFileBtn.style.display = '';
+    }
+
+    document.addEventListener('paste', (e) => {
+      const items = e.clipboardData && e.clipboardData.items;
+      if (!items) return;
+      for (const it of items) {
+        if (it.kind === 'file' && it.type.startsWith('image/')) {
+          const f = it.getAsFile();
+          if (f) {
+            setFile(f);
+            state('Фото вставлено из буфера обмена. Нажмите «Распознать».');
+            e.preventDefault();
+            return;
+          }
+        }
+      }
+    });
+
+    fileInput.addEventListener('change', () => {
+      const f = fileInput.files && fileInput.files[0];
+      if (f) setFile(f);
+    });
+
+    const dropzone = $('#dropzone');
+    dropzone.addEventListener('click', () => fileInput.click());
+    ['dragenter', 'dragover'].forEach((ev) => {
+      dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('over'); });
+    });
+    ['dragleave', 'drop'].forEach((ev) => {
+      dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove('over'); });
+    });
+    dropzone.addEventListener('drop', (e) => {
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!f) return;
+      setFile(f);
+      state('Файл загружен. Нажмите «Распознать».');
+    });
+
+    let lastEngine = 'gigachat';
+
+    async function recognize(engine) {
+      lastEngine = engine || lastEngine;
+      const f = currentFile;
+      if (!f) { state('Сначала выберите или перетащите фото паспорта'); return; }
+      recognizeBtn.disabled = true;
+      recognizeYandexBtn.disabled = true;
+      document.body.style.cursor = 'progress';
+      const isYandex = lastEngine === 'yandex';
+      state(isYandex ? 'Распознаю через Yandex OCR…' : 'Распознаю…');
+      try {
+        const base64 = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.onerror = reject;
+          r.readAsDataURL(f);
+        });
+        const body = { image: base64 };
+        if (isYandex) {
+          body.model = yandexModelSelect.value || 'passport';
+        } else {
+          const m = effectiveModel();
+          if (m) body.model = m;
+        }
+        const res = await fetch(isYandex ? '/api/recognize-yandex' : '/api/recognize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Ошибка распознавания');
+        if (isYandex) renderYandex(data);
+        else renderFields(data);
+        state('Готово. Проверьте и при необходимости перетащите значения между полями.');
+      } catch (e) {
+        const hint = location.protocol === 'file:'
+          ? ' Страница открыта как файл — запустите `node server.js` и откройте http://localhost:3000.'
+          : ' Убедитесь, что сервер работает (`node server.js`).';
+        state('Ошибка: ' + e.message + hint, true);
+      } finally {
+        recognizeBtn.disabled = false;
+        recognizeYandexBtn.disabled = false;
+        document.body.style.cursor = '';
+      }
+    }
+
+    recognizeBtn.addEventListener('click', () => recognize('gigachat'));
+    recognizeYandexBtn.addEventListener('click', () => recognize('yandex'));
+    $('#reRecognize').addEventListener('click', () => recognize(lastEngine));
+
+    $('#viewToggle').addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-view]');
+      if (!btn) return;
+      document.querySelectorAll('#viewToggle button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      fieldsEl.classList.toggle('table', btn.dataset.view === 'table');
+    });
+
+    async function copyTextToClipboard(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        ta.remove();
+        return ok;
+      }
+    }
+
+    $('#copyJson').addEventListener('click', async () => {
+      const json = JSON.stringify(collectFields(), null, 2);
+      const ok = await copyTextToClipboard(json);
+      state(ok ? 'JSON скопирован (со значениями с экрана).' : 'Не удалось скопировать JSON.', !ok);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      currentFile = null;
+      fileInput.value = '';
+      preview.style.display = 'none';
+      preview.src = '';
+      openFileBtn.style.display = 'none';
+      document.getElementById('dzPlaceholder').style.display = '';
+      fieldsEl.classList.remove('show');
+      actions.classList.remove('show');
+      rawResult.style.display = 'none';
+      resetBtn.style.display = 'none';
+      state('');
+    });
+
+    let activePromptName = null;
+
+    async function loadPrompts(select = null) {
+      const res = await fetch('/api/prompts');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка загрузки промптов');
+      const saved = localStorage.getItem('passportread.prompt');
+      let target = select || (saved && data.prompts.includes(saved) ? saved : data.current);
+      if (!data.prompts.includes(target)) target = data.prompts[0];
+
+      promptSelect.innerHTML = '';
+      data.prompts.forEach((name) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        promptSelect.appendChild(opt);
+      });
+      promptSelect.value = target;
+      await loadPromptContent(target);
+    }
+
+    async function loadPromptContent(name) {
+      localStorage.setItem('passportread.prompt', name);
+      const res = await fetch('/api/prompt?name=' + encodeURIComponent(name));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка загрузки промпта');
+      activePromptName = data.name;
+      promptText.value = data.prompt;
+      promptSelect.value = data.name;
+    }
+
+    promptSelect.addEventListener('change', () => {
+      if (!promptSelect.value) return;
+      loadPromptContent(promptSelect.value).then(() => {
+        promptStatus.className = 'prompt-status';
+        promptStatus.textContent = '';
+      }).catch((e) => {
+        promptStatus.className = 'prompt-status err';
+        promptStatus.textContent = 'Ошибка: ' + e.message;
+      });
+    });
+
+    $('#addPrompt').addEventListener('click', async () => {
+      const name = window.prompt('Название нового промпта:');
+      if (!name) return;
+      promptStatus.className = 'prompt-status';
+      promptStatus.textContent = 'Создаю…';
+      try {
+        const res = await fetch('/api/prompts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Ошибка создания промпта');
+        await loadPrompts(data.name);
+        promptStatus.className = 'prompt-status ok';
+        promptStatus.textContent = `Создан prompt_${data.name}.txt — отредактируйте и сохраните.`;
+      } catch (e) {
+        promptStatus.className = 'prompt-status err';
+        promptStatus.textContent = 'Ошибка: ' + e.message;
+      }
+    });
+
+    $('#savePrompt').addEventListener('click', async () => {
+      const text = promptText.value.trim();
+      if (!text) {
+        promptStatus.className = 'prompt-status err';
+        promptStatus.textContent = 'Промпт не должен быть пустым';
+        return;
+      }
+      promptStatus.className = 'prompt-status';
+      promptStatus.textContent = 'Сохраняю…';
+      try {
+        const res = await fetch('/api/prompt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: promptSelect.value || activePromptName, prompt: text }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Ошибка сохранения');
+        await loadPrompts(data.name);
+        promptStatus.className = 'prompt-status ok';
+        promptStatus.textContent = `Сохранено в prompt_${data.name}.txt`;
+      } catch (e) {
+        promptStatus.className = 'prompt-status err';
+        promptStatus.textContent = 'Ошибка: ' + e.message;
+      }
+    });
+
+    openFileBtn.addEventListener('click', async () => {
+      const f = currentFile;
+      if (!f) { state('Сначала загрузите фото'); return; }
+      state('Открываю файл…');
+      try {
+        const base64 = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.onerror = reject;
+          r.readAsDataURL(f);
+        });
+        const res = await fetch('/api/open-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64 }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Ошибка открытия файла');
+        state('Файл передан в связанную программу.');
+      } catch (e) {
+        state('Ошибка: ' + e.message, true);
+      }
+    });
+
+    if (location.protocol !== 'file:') {
+      loadPrompts().catch(() => {
+        promptStatus.className = 'prompt-status err';
+        promptStatus.textContent = 'Не удалось загрузить промпты';
+      });
+
+      fillYandexModels();
+
+      $('#copyRaw').addEventListener('click', async () => {
+        const ok = await copyTextToClipboard(rawTextEl.textContent || '');
+        state(ok ? 'Текст Yandex OCR скопирован.' : 'Не удалось скопировать текст.', !ok);
+      });
+
+      const CUSTOM = '__custom__';
+      const SAVED_KEY = 'passportread.model';
+
+      function effectiveModel() {
+        if (modelSelect.value === CUSTOM) return modelInput.value.trim();
+        return modelSelect.value;
+      }
+
+      function setCustomMode(on) {
+        modelInput.style.display = on ? '' : 'none';
+        if (on) modelInput.focus();
+      }
+
+      modelSelect.addEventListener('change', () => {
+        if (modelSelect.value === CUSTOM) {
+          setCustomMode(true);
+          if (!modelInput.value.trim()) modelInput.value = localStorage.getItem(SAVED_KEY) ?? '';
+          return;
+        }
+        setCustomMode(false);
+        localStorage.setItem(SAVED_KEY, modelSelect.value);
+      });
+
+      modelInput.addEventListener('change', () => {
+        const v = modelInput.value.trim();
+        if (v) localStorage.setItem(SAVED_KEY, v);
+      });
+
+      function fillModelList(models) {
+        modelSelect.innerHTML = '';
+        models.forEach((name) => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          modelSelect.appendChild(opt);
+        });
+        const custom = document.createElement('option');
+        custom.value = CUSTOM;
+        custom.textContent = 'Другое… (ввести свою)';
+        modelSelect.appendChild(custom);
+
+        const saved = localStorage.getItem(SAVED_KEY);
+        if (saved && models.includes(saved)) {
+          modelSelect.value = saved;
+          setCustomMode(false);
+        } else if (saved) {
+          modelSelect.value = CUSTOM;
+          modelInput.value = saved;
+          setCustomMode(true);
+        }
+      }
+
+      fetch('/api/models')
+        .then((r) => r.json())
+        .then((d) => {
+          if (d && Array.isArray(d.models)) fillModelList(d.models);
+        })
+        .catch(() => {});
+
+      if (!localStorage.getItem(SAVED_KEY)) {
+        fetch('/api/health')
+          .then((r) => r.json())
+          .then((d) => {
+            if (d && d.defaultModel) {
+              modelSelect.value = d.defaultModel;
+              localStorage.setItem(SAVED_KEY, d.defaultModel);
+            }
+          })
+          .catch(() => {});
+      }
+
+      fetch('/api/health')
+        .then((r) => r.json())
+        .then((d) => {
+          if (!d) return;
+          if (d.credentials === false && d.yandex === false) {
+            document.getElementById('authNote').classList.add('auth-missing');
+          }
+        })
+        .catch(() => {});
+
+      document.getElementById('addModel').addEventListener('click', async () => {
+        const value = effectiveModel();
+        if (!value) return;
+        try {
+          const res = await fetch('/api/models', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: value }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Ошибка сохранения модели');
+          fillModelList(data.models);
+          if (data.models.includes(value)) {
+            modelSelect.value = value;
+            setCustomMode(false);
+          }
+          localStorage.setItem(SAVED_KEY, value);
+          state(`Модель добавлена в список (models.txt).`);
+        } catch (e) {
+          state('Ошибка: ' + e.message, true);
+        }
+      });
+
+      document.getElementById('openEnv').addEventListener('click', async () => {
+        try {
+          const res = await fetch('/api/open-env', { method: 'POST' });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Не удалось открыть .env');
+          state('Файл .env открыт в редакторе.');
+        } catch (e) {
+          state('Ошибка: ' + e.message, true);
+        }
+      });
+    }
+  </script>
+</body>
+</html>

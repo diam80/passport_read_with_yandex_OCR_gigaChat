@@ -1,0 +1,16 @@
+Embeddings
+GigaChat Lite
+GigaChat-2-Emotions
+GigaChat-2-Lite
+GigaChat-2-Max
+GigaChat-2-Mini
+GigaChat-2-Pro
+GigaChat-2-Top
+GigaChat-2-Vision
+GigaChat-3-Ultra
+GigaChat-Max
+GigaChat-Max-preview
+GigaChat-Plus
+GigaChat-preview
+GigaChat-Pro
+GigaChat-Pro-preview
